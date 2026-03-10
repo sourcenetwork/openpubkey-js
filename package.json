@@ -1,0 +1,68 @@
+{
+  "name": "@sourcenetwork/openpubkey-js",
+  "version": "0.3.3",
+  "description": "TypeScript implementation of the OpenPubKey protocol",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\""
+  },
+  "keywords": [
+    "openpubkey",
+    "oidc",
+    "openid-connect",
+    "authentication",
+    "cryptography",
+    "jwt",
+    "pktoken",
+    "identity",
+    "signing",
+    "gq-signatures"
+  ],
+  "homepage": "https://github.com/sourcenetwork/openpubkey-js#readme",
+  "bugs": {
+    "url": "https://github.com/sourcenetwork/openpubkey-js/issues"
+  },
+  "author": "Ivan Vercenco",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@noble/hashes": "^2.0.1",
+    "jose": "^5.2.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sourcenetwork/openpubkey-js.git"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "jest": "^29.5.0",
+    "prettier": "^3.0.0",
+    "ts-jest": "^29.1.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "packageManager": "yarn@4.9.2+sha512.1fc009bc09d13cfd0e19efa44cbfc2b9cf6ca61482725eb35bbc5e257e093ebf4130db6dfe15d604ff4b79efd8e1e8e99b25fa7d0a6197c9f9826358d4d65c3c"
+}
