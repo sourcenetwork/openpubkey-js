@@ -1,0 +1,43 @@
+# TypeScript build artifacts
+dist/
+*.js
+*.js.map
+*.d.ts
+!jest.config.js
+.yarn
+
+# Node modules
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Claude
+.claude/
+
+# Misc
+.cache/
