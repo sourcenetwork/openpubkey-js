@@ -14,6 +14,9 @@ export * from './client/index.js';
 export * from './verifier/index.js';
 export * from './cosigner/index.js';
 
+// Bearer token helper for trust-api-style consumers
+export * from './bearer/index.js';
+
 // Browser-specific exports
 export {
   randomBytes,
