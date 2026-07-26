@@ -29,11 +29,24 @@ export enum KeyAlgorithm {
   EdDSA = 'EdDSA',
 }
 
+export function webCryptoSignAlgorithm(algorithm: string): AlgorithmIdentifier | EcdsaParams {
+  switch (algorithm) {
+    case KeyAlgorithm.ES256:
+      return { name: 'ECDSA', hash: 'SHA-256' };
+    case KeyAlgorithm.RS256:
+      return { name: 'RSASSA-PKCS1-v1_5' };
+    default:
+      throw new Error(`Unsupported Web Crypto signing algorithm: ${algorithm}`);
+  }
+}
+
 /**
  * Generates a key pair for the specified algorithm.
  * Returns CryptoKey in browser, KeyObject in Node.js.
  */
-export async function genKeyPair(alg: KeyAlgorithm): Promise<CryptoKey | nodeCryptoModule.KeyObject> {
+export async function genKeyPair(
+  alg: KeyAlgorithm
+): Promise<CryptoKey | nodeCryptoModule.KeyObject> {
   if (isBrowser) {
     return genKeyPairBrowser(alg);
   } else {
@@ -101,14 +114,10 @@ function genKeyPairNode(alg: KeyAlgorithm): Promise<nodeCryptoModule.KeyObject> 
         );
         break;
       case KeyAlgorithm.EdDSA:
-        nodeCryptoModule.generateKeyPair(
-          'ed25519',
-          {},
-          (err, _publicKey, privateKey) => {
-            if (err) reject(err);
-            else resolve(privateKey);
-          }
-        );
+        nodeCryptoModule.generateKeyPair('ed25519', {}, (err, _publicKey, privateKey) => {
+          if (err) reject(err);
+          else resolve(privateKey);
+        });
         break;
       default:
         reject(new Error(`Unsupported algorithm: ${alg}`));

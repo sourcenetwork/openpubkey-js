@@ -1,6 +1,8 @@
 import * as jose from 'jose';
 import type { PKToken } from './pktoken.js';
 import type { VerifyOptions } from './osm.js';
+import { base64UrlEncode } from '../util/base64.js';
+import { webCryptoSignAlgorithm } from '../util/crypto.js';
 
 // Browser type declarations
 declare const crypto: { subtle: SubtleCrypto };
@@ -43,18 +45,21 @@ export async function newSignedMessageBrowser(
   if (!algorithm) {
     throw new Error('CIC public key does not specify an algorithm');
   }
-  // Export the browser CryptoKey to JWK format
-  const privateKeyJwk = await crypto.subtle.exportKey('jwk', signer);
-  // Import it using jose for signing
-  const privateKey = await jose.importJWK(privateKeyJwk as jose.JWK, algorithm);
-  // pktHash is already a string (base64url encoded hash)
-  const jws = await new jose.CompactSign(content)
-    .setProtectedHeader({
+  const protectedHeader = base64UrlEncode(
+    JSON.stringify({
       alg: algorithm,
       kid: pktHash,
       typ: 'osm',
     })
-    .sign(privateKey);
+  );
+  const payload = base64UrlEncode(content);
+  const signingInput = `${protectedHeader}.${payload}`;
+  const signature = await crypto.subtle.sign(
+    webCryptoSignAlgorithm(algorithm),
+    signer,
+    new TextEncoder().encode(signingInput)
+  );
+  const jws = `${signingInput}.${base64UrlEncode(new Uint8Array(signature))}`;
   return new TextEncoder().encode(jws);
 }
 
@@ -97,9 +102,7 @@ export async function verifySignedMessageBrowser(
   }
   // Decode the protected header
   const protectedHeaderBytes = jose.base64url.decode(parts[0]);
-  const protectedHeader = JSON.parse(
-    new TextDecoder().decode(protectedHeaderBytes)
-  );
+  const protectedHeader = JSON.parse(new TextDecoder().decode(protectedHeaderBytes));
   // Verify typ header
   if (!protectedHeader.typ) {
     throw new Error('Missing required header `typ`');

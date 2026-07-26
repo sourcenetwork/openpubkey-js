@@ -1,5 +1,11 @@
 import * as jose from 'jose';
+import { webcrypto } from 'node:crypto';
 import { Claims } from '../claims.js';
+
+Object.defineProperty(globalThis, 'crypto', {
+  configurable: true,
+  value: webcrypto,
+});
 
 describe('Claims', () => {
   describe('parseClaims', () => {
@@ -259,6 +265,33 @@ describe('Claims', () => {
       const signedStr = new TextDecoder().decode(signed);
       const result = await jose.jwtVerify(signedStr, keyPair.publicKey);
       expect(result.payload.sub).toBe('user123');
+    });
+
+    it.each([
+      ['ES256', { name: 'ECDSA', namedCurve: 'P-256' } as EcKeyGenParams],
+      [
+        'RS256',
+        {
+          name: 'RSASSA-PKCS1-v1_5',
+          modulusLength: 2048,
+          publicExponent: new Uint8Array([1, 0, 1]),
+          hash: 'SHA-256',
+        } as RsaHashedKeyGenParams,
+      ],
+    ])('signs with a non-extractable %s browser key', async (algorithm, keyParams) => {
+      const keyPair = (await crypto.subtle.generateKey(keyParams, false, [
+        'sign',
+        'verify',
+      ])) as CryptoKeyPair;
+      const claims = await Claims.newClaims(keyPair.publicKey);
+      const payload = jose.base64url.encode(JSON.stringify({ sub: 'user123' }));
+      const idToken = new TextEncoder().encode(`e30.${payload}.signature`);
+
+      const signed = await claims.sign(keyPair.privateKey, algorithm, idToken);
+      const result = await jose.jwtVerify(new TextDecoder().decode(signed), keyPair.publicKey);
+
+      expect(result.payload.sub).toBe('user123');
+      expect(keyPair.privateKey.extractable).toBe(false);
     });
   });
 

@@ -1,5 +1,5 @@
 import * as jose from 'jose';
-import { b64SHA3_256, randomBytes, randomHex } from '../../util/crypto.js';
+import { b64SHA3_256, randomBytes, randomHex, webCryptoSignAlgorithm } from '../../util/crypto.js';
 import { base64DecodeForJWT, base64UrlEncode } from '../../util/base64.js';
 import { jsonStringifySorted } from '../../util/json.js';
 import { splitCompact } from '../../oidc/oidc.js';
@@ -29,8 +29,8 @@ export class Claims {
     claims: Record<string, unknown> = {}
   ): Promise<Claims> {
     let jwk: jose.JWK;
-    if (isBrowser && 'algorithm' in (publicKey as CryptoKey)) {
-      const cryptoKey = publicKey as CryptoKey;
+    if (isCryptoKey(publicKey)) {
+      const cryptoKey = publicKey;
       jwk = (await crypto.subtle.exportKey('jwk', cryptoKey)) as jose.JWK;
       if (!jwk.alg) {
         const algName = cryptoKey.algorithm.name;
@@ -120,15 +120,11 @@ export class Claims {
   /**
    * Signs the payload of a token with the protected headers defined by the CIC
    */
-  async sign(
-    signer: jose.KeyLike,
-    _algorithm: string,
-    token: Uint8Array
-  ): Promise<Uint8Array> {
+  async sign(signer: jose.KeyLike, algorithm: string, token: Uint8Array): Promise<Uint8Array> {
     const [, payloadEncoded] = splitCompact(token);
     const payloadDecoded = base64DecodeForJWT(payloadEncoded);
-    if (isBrowser && 'algorithm' in (signer as CryptoKey)) {
-      const cryptoKey = signer as CryptoKey;
+    if (isCryptoKey(signer)) {
+      const cryptoKey = signer;
       const header = this.protected;
       const payload = JSON.parse(new TextDecoder().decode(payloadDecoded));
       const headerB64 = base64UrlEncode(JSON.stringify(header));
@@ -136,7 +132,7 @@ export class Claims {
       const signingInput = `${headerB64}.${payloadB64}`;
       const signingInputBytes = new TextEncoder().encode(signingInput);
       const signatureBytes = await crypto.subtle.sign(
-        { name: 'ECDSA', hash: { name: 'SHA-256' } },
+        webCryptoSignAlgorithm(algorithm),
         cryptoKey,
         signingInputBytes
       );
@@ -150,6 +146,17 @@ export class Claims {
       return new TextEncoder().encode(jwt);
     }
   }
+}
+
+function isCryptoKey(value: unknown): value is CryptoKey {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'algorithm' in value &&
+    'extractable' in value &&
+    'type' in value &&
+    'usages' in value
+  );
 }
 
 /**
