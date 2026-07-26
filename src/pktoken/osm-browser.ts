@@ -2,7 +2,7 @@ import * as jose from 'jose';
 import type { PKToken } from './pktoken.js';
 import type { VerifyOptions } from './osm.js';
 import { base64UrlEncode } from '../util/base64.js';
-import { webCryptoSignAlgorithm } from '../util/crypto.js';
+import { webCryptoAlgorithm } from '../util/crypto.js';
 
 // Browser type declarations
 declare const crypto: { subtle: SubtleCrypto };
@@ -55,7 +55,7 @@ export async function newSignedMessageBrowser(
   const payload = base64UrlEncode(content);
   const signingInput = `${protectedHeader}.${payload}`;
   const signature = await crypto.subtle.sign(
-    webCryptoSignAlgorithm(algorithm),
+    webCryptoAlgorithm(algorithm).signParams,
     signer,
     new TextEncoder().encode(signingInput)
   );

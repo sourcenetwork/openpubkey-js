@@ -293,6 +293,21 @@ describe('Claims', () => {
       expect(result.payload.sub).toBe('user123');
       expect(keyPair.privateKey.extractable).toBe(false);
     });
+
+    it('rejects a signing algorithm that differs from the CIC header', async () => {
+      const keyPair = (await crypto.subtle.generateKey(
+        { name: 'ECDSA', namedCurve: 'P-256' },
+        false,
+        ['sign', 'verify']
+      )) as CryptoKeyPair;
+      const claims = await Claims.newClaims(keyPair.publicKey);
+      const payload = jose.base64url.encode(JSON.stringify({ sub: 'user123' }));
+      const idToken = new TextEncoder().encode(`e30.${payload}.signature`);
+
+      await expect(claims.sign(keyPair.privateKey, 'RS256', idToken)).rejects.toThrow(
+        'does not match CIC algorithm'
+      );
+    });
   });
 
   describe('constructor', () => {

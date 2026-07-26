@@ -1,5 +1,5 @@
 import * as jose from 'jose';
-import { b64SHA3_256, randomBytes, randomHex, webCryptoSignAlgorithm } from '../../util/crypto.js';
+import { b64SHA3_256, randomBytes, randomHex, webCryptoAlgorithm } from '../../util/crypto.js';
 import { base64DecodeForJWT, base64UrlEncode } from '../../util/base64.js';
 import { jsonStringifySorted } from '../../util/json.js';
 import { splitCompact } from '../../oidc/oidc.js';
@@ -121,6 +121,11 @@ export class Claims {
    * Signs the payload of a token with the protected headers defined by the CIC
    */
   async sign(signer: jose.KeyLike, algorithm: string, token: Uint8Array): Promise<Uint8Array> {
+    if (this.protected.alg !== algorithm) {
+      throw new Error(
+        `Signing algorithm ${algorithm} does not match CIC algorithm ${String(this.protected.alg)}`
+      );
+    }
     const [, payloadEncoded] = splitCompact(token);
     const payloadDecoded = base64DecodeForJWT(payloadEncoded);
     if (isCryptoKey(signer)) {
@@ -132,7 +137,7 @@ export class Claims {
       const signingInput = `${headerB64}.${payloadB64}`;
       const signingInputBytes = new TextEncoder().encode(signingInput);
       const signatureBytes = await crypto.subtle.sign(
-        webCryptoSignAlgorithm(algorithm),
+        webCryptoAlgorithm(algorithm).signParams,
         cryptoKey,
         signingInputBytes
       );
@@ -149,6 +154,9 @@ export class Claims {
 }
 
 function isCryptoKey(value: unknown): value is CryptoKey {
+  if (typeof CryptoKey !== 'undefined') {
+    return value instanceof CryptoKey;
+  }
   return (
     typeof value === 'object' &&
     value !== null &&

@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Enable corepack
         run: corepack enable
@@ -32,6 +34,9 @@ jobs:
 
       - name: Test
         run: yarn test
+
+      - name: Lint
+        run: yarn lint
 
       - name: Build
         run: yarn build

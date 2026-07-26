@@ -6,7 +6,7 @@ import type { OpenIdProvider } from '../providers/types.js';
 import type { Tokens } from '../oidc/tokens.js';
 import { PKToken } from '../pktoken/pktoken.js';
 import { Claims } from '../pktoken/clientinstance/claims.js';
-import { KeyAlgorithm, randomHex } from '../util/crypto.js';
+import { KeyAlgorithm, randomHex, webCryptoAlgorithm } from '../util/crypto.js';
 import { Verifier } from '../verifier/verifier.js';
 import type { AuthOptions } from './client.js';
 import {
@@ -119,14 +119,25 @@ export class OpkClientBrowser {
     }
 
     await OpkClientBrowser.clearStoredAuth();
+    const cic = await Claims.newClaims(this.publicKey, options?.extraClaims || {});
+    const cicProtected = JSON.stringify(cic.getProtected());
     const signerID = randomHex(16);
     await saveBrowserSigner(signerID, this.signer);
-    sessionStorage.setItem(SIGNER_ID_STORAGE_KEY, signerID);
-    sessionStorage.setItem(ALGORITHM_STORAGE_KEY, this.algorithm);
-
-    const cic = await Claims.newClaims(this.publicKey, options?.extraClaims || {});
-    const cicProtected = cic.getProtected();
-    sessionStorage.setItem(CIC_STORAGE_KEY, JSON.stringify(cicProtected));
+    try {
+      sessionStorage.setItem(SIGNER_ID_STORAGE_KEY, signerID);
+      sessionStorage.setItem(ALGORITHM_STORAGE_KEY, this.algorithm);
+      sessionStorage.setItem(CIC_STORAGE_KEY, cicProtected);
+    } catch (error) {
+      try {
+        await deleteBrowserSigner(signerID);
+      } catch (cleanupError) {
+        console.error('Failed to remove browser signer after storage error', cleanupError);
+      }
+      sessionStorage.removeItem(SIGNER_ID_STORAGE_KEY);
+      sessionStorage.removeItem(ALGORITHM_STORAGE_KEY);
+      sessionStorage.removeItem(CIC_STORAGE_KEY);
+      throw error;
+    }
     await this.op.requestTokens(cic);
     throw new Error('Expected redirect to OAuth provider');
   }
@@ -164,6 +175,9 @@ export class OpkClientBrowser {
    * Call this after the browser redirects back from the OAuth provider.
    */
   async completeAuth(): Promise<PKToken> {
+    let result: PKToken | undefined;
+    let authError: unknown;
+    let authFailed = false;
     try {
       const browserOp = this.op as BrowserOpenIdProvider;
       const tokens = browserOp.handleCallback();
@@ -192,10 +206,28 @@ export class OpkClientBrowser {
       const verifier = await Verifier.newVerifier(this.op);
       await verifier.verifyPKToken(pkt);
       this.pkToken = pkt;
-      return pkt;
-    } finally {
-      await OpkClientBrowser.clearStoredAuth();
+      result = pkt;
+    } catch (error) {
+      authError = error;
+      authFailed = true;
     }
+
+    try {
+      await OpkClientBrowser.clearStoredAuth();
+    } catch (cleanupError) {
+      if (!authFailed) {
+        throw cleanupError;
+      }
+      console.error('Failed to clear browser authentication state', cleanupError);
+    }
+
+    if (authFailed) {
+      throw authError;
+    }
+    if (!result) {
+      throw new Error('Authentication completed without a PK token');
+    }
+    return result;
   }
 
   /**
@@ -236,10 +268,15 @@ async function normalizeProvidedSigner(
   algorithm: KeyAlgorithm,
   publicKey?: CryptoKey
 ): Promise<{ signer: CryptoKey; publicKey?: CryptoKey }> {
-  if (signer.type !== 'private' || !signer.usages.includes('sign')) {
-    throw new Error('Browser signer must be a private signing key');
+  assertBrowserKey(signer, 'private', 'sign', algorithm);
+  if (publicKey) {
+    assertBrowserKey(publicKey, 'public', 'verify', algorithm);
+    await assertMatchingKeyPair(signer, publicKey, algorithm);
   }
   if (!signer.extractable) {
+    if (!publicKey) {
+      throw new Error('A public key must be provided with a non-extractable signer');
+    }
     return { signer, publicKey };
   }
 
@@ -248,7 +285,7 @@ async function normalizeProvidedSigner(
   const nonExtractableSigner = await crypto.subtle.importKey(
     'jwk',
     cleanPrivateJwk,
-    webCryptoAlgorithm(algorithm),
+    webCryptoAlgorithm(algorithm).importParams,
     false,
     ['sign']
   );
@@ -260,7 +297,7 @@ async function normalizeProvidedSigner(
   const derivedPublicKey = await crypto.subtle.importKey(
     'jwk',
     publicJwk,
-    webCryptoAlgorithm(algorithm),
+    webCryptoAlgorithm(algorithm).importParams,
     true,
     ['verify']
   );
@@ -292,38 +329,48 @@ function publicJwkFromPrivate(privateJwk: JsonWebKey, algorithm: KeyAlgorithm): 
   }
 }
 
-function webCryptoAlgorithm(
+function assertBrowserKey(
+  key: CryptoKey,
+  type: KeyType,
+  usage: KeyUsage,
   algorithm: KeyAlgorithm
-): AlgorithmIdentifier | RsaHashedImportParams | EcKeyImportParams {
-  switch (algorithm) {
-    case KeyAlgorithm.ES256:
-      return { name: 'ECDSA', namedCurve: 'P-256' };
-    case KeyAlgorithm.RS256:
-      return { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' };
-    default:
-      throw new Error(`Unsupported algorithm for browser: ${algorithm}`);
+): void {
+  const expected = webCryptoAlgorithm(algorithm).importParams;
+  const actual = key.algorithm;
+  const algorithmMatches =
+    actual.name === expected.name &&
+    (algorithm !== KeyAlgorithm.ES256 ||
+      (actual as EcKeyAlgorithm).namedCurve === (expected as EcKeyImportParams).namedCurve) &&
+    (algorithm !== KeyAlgorithm.RS256 ||
+      (actual as RsaHashedKeyAlgorithm).hash.name === (expected as RsaHashedImportParams).hash);
+  const canExportPublicKey = type !== 'public' || key.extractable;
+  if (
+    key.type !== type ||
+    !key.usages.includes(usage) ||
+    !algorithmMatches ||
+    !canExportPublicKey
+  ) {
+    throw new Error(`Browser ${type} key is not a valid ${algorithm} ${usage} key`);
+  }
+}
+
+async function assertMatchingKeyPair(
+  signer: CryptoKey,
+  publicKey: CryptoKey,
+  algorithm: KeyAlgorithm
+): Promise<void> {
+  const challenge = crypto.getRandomValues(new Uint8Array(32));
+  const signParams = webCryptoAlgorithm(algorithm).signParams;
+  const signature = await crypto.subtle.sign(signParams, signer, challenge);
+  const matches = await crypto.subtle.verify(signParams, publicKey, signature, challenge);
+  if (!matches) {
+    throw new Error('Provided browser public key does not match the signer');
   }
 }
 
 async function generateBrowserKeyPair(algorithm: KeyAlgorithm): Promise<CryptoKeyPair> {
-  switch (algorithm) {
-    case KeyAlgorithm.ES256:
-      return crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, false, [
-        'sign',
-        'verify',
-      ]);
-    case KeyAlgorithm.RS256:
-      return crypto.subtle.generateKey(
-        {
-          name: 'RSASSA-PKCS1-v1_5',
-          modulusLength: 2048,
-          publicExponent: new Uint8Array([1, 0, 1]),
-          hash: 'SHA-256',
-        },
-        false,
-        ['sign', 'verify']
-      );
-    default:
-      throw new Error(`Unsupported algorithm for browser: ${algorithm}`);
-  }
+  return crypto.subtle.generateKey(webCryptoAlgorithm(algorithm).generateParams, false, [
+    'sign',
+    'verify',
+  ]) as Promise<CryptoKeyPair>;
 }
