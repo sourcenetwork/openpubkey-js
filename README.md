@@ -57,7 +57,14 @@ const client = await OpkClientBrowser.newClient(op);
 
 // This will redirect to Google for authentication
 await client.auth();
+
+// After the provider redirects back to the same origin:
+const resumedClient = await OpkClientBrowser.resumeAuth(op);
+const pkToken = await resumedClient.completeAuth();
 ```
+
+The browser flow keeps its private signer as a non-extractable `CryptoKey` in IndexedDB during
+the redirect. Callback state contains only a random key reference and public CIC data.
 
 ## Supported Identity Providers
 

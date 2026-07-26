@@ -29,11 +29,49 @@ export enum KeyAlgorithm {
   EdDSA = 'EdDSA',
 }
 
+export interface WebCryptoAlgorithm {
+  importParams: EcKeyImportParams | RsaHashedImportParams;
+  generateParams: EcKeyGenParams | RsaHashedKeyGenParams;
+  signParams: AlgorithmIdentifier | EcdsaParams;
+}
+
+export function webCryptoAlgorithm(algorithm: string): WebCryptoAlgorithm {
+  switch (algorithm) {
+    case KeyAlgorithm.ES256: {
+      const keyParams: EcKeyImportParams = { name: 'ECDSA', namedCurve: 'P-256' };
+      return {
+        importParams: keyParams,
+        generateParams: keyParams,
+        signParams: { name: 'ECDSA', hash: 'SHA-256' },
+      };
+    }
+    case KeyAlgorithm.RS256: {
+      const importParams: RsaHashedImportParams = {
+        name: 'RSASSA-PKCS1-v1_5',
+        hash: 'SHA-256',
+      };
+      return {
+        importParams,
+        generateParams: {
+          ...importParams,
+          modulusLength: 2048,
+          publicExponent: new Uint8Array([1, 0, 1]),
+        },
+        signParams: { name: 'RSASSA-PKCS1-v1_5' },
+      };
+    }
+    default:
+      throw new Error(`Unsupported Web Crypto algorithm: ${algorithm}`);
+  }
+}
+
 /**
  * Generates a key pair for the specified algorithm.
  * Returns CryptoKey in browser, KeyObject in Node.js.
  */
-export async function genKeyPair(alg: KeyAlgorithm): Promise<CryptoKey | nodeCryptoModule.KeyObject> {
+export async function genKeyPair(
+  alg: KeyAlgorithm
+): Promise<CryptoKey | nodeCryptoModule.KeyObject> {
   if (isBrowser) {
     return genKeyPairBrowser(alg);
   } else {
@@ -45,33 +83,14 @@ export async function genKeyPair(alg: KeyAlgorithm): Promise<CryptoKey | nodeCry
  * Browser implementation using Web Crypto API
  */
 async function genKeyPairBrowser(alg: KeyAlgorithm): Promise<CryptoKey> {
-  switch (alg) {
-    case KeyAlgorithm.ES256: {
-      const keyPair = await crypto.subtle.generateKey(
-        { name: 'ECDSA', namedCurve: 'P-256' },
-        true,
-        ['sign']
-      );
-      return keyPair.privateKey;
-    }
-    case KeyAlgorithm.RS256: {
-      const keyPair = await crypto.subtle.generateKey(
-        {
-          name: 'RSASSA-PKCS1-v1_5',
-          modulusLength: 2048,
-          publicExponent: new Uint8Array([1, 0, 1]),
-          hash: 'SHA-256',
-        },
-        true,
-        ['sign', 'verify']
-      );
-      return keyPair.privateKey;
-    }
-    case KeyAlgorithm.EdDSA:
-      throw new Error('EdDSA not yet supported in browser');
-    default:
-      throw new Error(`Unsupported algorithm: ${alg}`);
+  if (alg === KeyAlgorithm.EdDSA) {
+    throw new Error('EdDSA not yet supported in browser');
   }
+  const keyPair = (await crypto.subtle.generateKey(webCryptoAlgorithm(alg).generateParams, true, [
+    'sign',
+    'verify',
+  ])) as CryptoKeyPair;
+  return keyPair.privateKey;
 }
 
 /**
@@ -101,14 +120,10 @@ function genKeyPairNode(alg: KeyAlgorithm): Promise<nodeCryptoModule.KeyObject> 
         );
         break;
       case KeyAlgorithm.EdDSA:
-        nodeCryptoModule.generateKeyPair(
-          'ed25519',
-          {},
-          (err, _publicKey, privateKey) => {
-            if (err) reject(err);
-            else resolve(privateKey);
-          }
-        );
+        nodeCryptoModule.generateKeyPair('ed25519', {}, (err, _publicKey, privateKey) => {
+          if (err) reject(err);
+          else resolve(privateKey);
+        });
         break;
       default:
         reject(new Error(`Unsupported algorithm: ${alg}`));
