@@ -44,7 +44,8 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@noble/hashes": "^2.0.1",
-    "jose": "^5.2.0"
+    "jose": "^5.2.0",
+    "oauth4webapi": "^3.8.7"
   },
   "repository": {
     "type": "git",

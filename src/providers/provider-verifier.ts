@@ -100,6 +100,14 @@ export class DefaultProviderVerifier {
         `Audience mismatch: expected ${expectedClientID}, got ${audiences.join(', ')}`
       );
     }
+    if (audiences.length > 1 && payload.azp === undefined) {
+      throw new Error('Missing authorized party for ID token with multiple audiences');
+    }
+    if (payload.azp !== undefined && payload.azp !== expectedClientID) {
+      throw new Error(
+        `Authorized party mismatch: expected ${expectedClientID}, got ${payload.azp}`
+      );
+    }
   }
 
   /**

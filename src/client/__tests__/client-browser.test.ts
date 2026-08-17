@@ -1,7 +1,7 @@
 import { webcrypto } from 'node:crypto';
 import { jest } from '@jest/globals';
 import 'fake-indexeddb/auto';
-import type { OpenIdProvider } from '../../providers/types.js';
+import type { BrowserOpenIdProvider } from '../../providers/types.js';
 import { KeyAlgorithm } from '../../util/crypto.js';
 import { OpkClientBrowser } from '../client-browser.js';
 
@@ -54,7 +54,7 @@ describe('OpkClientBrowser signer lifecycle', () => {
       requestTokens: async () => {
         throw new Error('Redirecting to provider');
       },
-    } as unknown as OpenIdProvider;
+    } as unknown as BrowserOpenIdProvider;
 
     const client = await OpkClientBrowser.newClient(op);
     expect(client.getSigner().extractable).toBe(false);
@@ -73,7 +73,7 @@ describe('OpkClientBrowser signer lifecycle', () => {
       requestTokens: async () => {
         throw new Error('Redirecting to provider');
       },
-    } as unknown as OpenIdProvider;
+    } as unknown as BrowserOpenIdProvider;
     const client = await OpkClientBrowser.newClient(op);
 
     await expect(client.auth({ extraClaims: { alg: 'ES256' } })).rejects.toThrow(
@@ -94,7 +94,7 @@ describe('OpkClientBrowser signer lifecycle', () => {
       requestTokens: async () => {
         throw new Error('Redirecting to provider');
       },
-    } as unknown as OpenIdProvider;
+    } as unknown as BrowserOpenIdProvider;
 
     const client = await OpkClientBrowser.newClient(op, {
       signer: keyPair.privateKey,
@@ -121,7 +121,7 @@ describe('OpkClientBrowser signer lifecycle', () => {
       requestTokens: async () => {
         throw new Error('Redirecting to provider');
       },
-    } as unknown as OpenIdProvider;
+    } as unknown as BrowserOpenIdProvider;
 
     const client = await OpkClientBrowser.newClient(op, {
       signer: keyPair.privateKey,
@@ -155,7 +155,7 @@ describe('OpkClientBrowser signer lifecycle', () => {
     ]);
 
     await expect(
-      OpkClientBrowser.newClient({} as OpenIdProvider, {
+      OpkClientBrowser.newClient({} as BrowserOpenIdProvider, {
         signer: keyPair.privateKey,
         algorithm: KeyAlgorithm.ES256,
       })
@@ -175,7 +175,7 @@ describe('OpkClientBrowser signer lifecycle', () => {
     );
 
     await expect(
-      OpkClientBrowser.newClient({} as OpenIdProvider, {
+      OpkClientBrowser.newClient({} as BrowserOpenIdProvider, {
         signer: signerPair.privateKey,
         publicKey: otherPair.publicKey,
         algorithm: KeyAlgorithm.ES256,
@@ -192,7 +192,7 @@ describe('OpkClientBrowser signer lifecycle', () => {
       sessionStorage.setItem('opk_signer_id', 'unavailable-signer');
       const client = await OpkClientBrowser.newClient({
         handleCallback: () => null,
-      } as unknown as OpenIdProvider);
+      } as unknown as BrowserOpenIdProvider);
 
       await expect(client.completeAuth()).rejects.toThrow('No tokens found in callback');
       expect(consoleSpy).toHaveBeenCalledWith(

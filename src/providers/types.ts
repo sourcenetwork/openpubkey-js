@@ -40,6 +40,11 @@ export interface OpenIdProvider {
   verifyIDToken(idt: Uint8Array, cic: Claims): Promise<void>;
 }
 
+/** OpenID provider that completes an OAuth redirect in a browser. */
+export interface BrowserOpenIdProvider extends OpenIdProvider {
+  handleCallback(): Tokens | null | Promise<Tokens | null>;
+}
+
 /**
  * Interface for an OpenID Provider that supports token refresh
  */

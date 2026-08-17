@@ -31,6 +31,7 @@ export {
   getDefaultGoogleBrowserOpOptions,
   type GoogleBrowserOptions,
 } from './providers/google-browser.js';
+export { BrowserOidcOp, type BrowserOidcOptions } from './providers/browser-oidc.js';
 export {
   OpkClientBrowser,
   type ClientBrowserOptions,

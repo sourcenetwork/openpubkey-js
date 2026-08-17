@@ -66,6 +66,28 @@ const pkToken = await resumedClient.completeAuth();
 The browser flow keeps its private signer as a non-extractable `CryptoKey` in IndexedDB during
 the redirect. Callback state contains only a random key reference and public CIC data.
 
+For Auth0 or another standards-compliant provider, use authorization code flow with PKCE:
+
+```typescript
+import { BrowserOidcOp, OpkClientBrowser } from '@sourcenetwork/openpubkey-js';
+
+const op = new BrowserOidcOp({
+  issuer: 'https://example.auth0.com/',
+  clientID: 'your-client-id',
+  redirectURI: 'https://app.example.com/callback',
+});
+
+const client = await OpkClientBrowser.newClient(op);
+await client.auth();
+
+const resumedClient = await OpkClientBrowser.resumeAuth(op);
+const pkToken = await resumedClient.completeAuth();
+```
+
+The provider must return the requested nonce unchanged in its ID token. The implementation validates
+OIDC state, S256 PKCE, discovery metadata, issuer, audience, signature, expiry, and the OpenPubKey
+CIC commitment. It never requests or returns a browser refresh token.
+
 ## Supported Identity Providers
 
 - Google (Node.js and Browser)

@@ -2,8 +2,7 @@
  * Browser-compatible OpenPubKey Client
  */
 
-import type { OpenIdProvider } from '../providers/types.js';
-import type { Tokens } from '../oidc/tokens.js';
+import type { BrowserOpenIdProvider } from '../providers/types.js';
 import { PKToken } from '../pktoken/pktoken.js';
 import { Claims } from '../pktoken/clientinstance/claims.js';
 import { KeyAlgorithm, randomHex, webCryptoAlgorithm } from '../util/crypto.js';
@@ -20,11 +19,6 @@ const LEGACY_SIGNER_JWK_STORAGE_KEY = 'opk_signer_jwk';
 const ALGORITHM_STORAGE_KEY = 'opk_algorithm';
 const CIC_STORAGE_KEY = 'opk_cic_protected';
 
-// Browser provider with handleCallback method
-interface BrowserOpenIdProvider extends OpenIdProvider {
-  handleCallback(): Tokens | null;
-}
-
 /**
  * Options for creating an OpenPubKey client (Browser)
  */
@@ -40,7 +34,7 @@ export interface ClientBrowserOptions {
  * Main client for performing OpenPubKey authentication in browser environments
  */
 export class OpkClientBrowser {
-  private op: OpenIdProvider;
+  private op: BrowserOpenIdProvider;
   private signer: CryptoKey;
   private publicKey?: CryptoKey;
   private algorithm: KeyAlgorithm;
@@ -48,7 +42,7 @@ export class OpkClientBrowser {
   private accessToken?: Uint8Array;
 
   private constructor(
-    op: OpenIdProvider,
+    op: BrowserOpenIdProvider,
     signer: CryptoKey,
     algorithm: KeyAlgorithm,
     publicKey?: CryptoKey
@@ -63,7 +57,7 @@ export class OpkClientBrowser {
    * Creates a new OpenPubKey client for browser
    */
   static async newClient(
-    op: OpenIdProvider,
+    op: BrowserOpenIdProvider,
     options?: ClientBrowserOptions
   ): Promise<OpkClientBrowser> {
     let signer: CryptoKey;
@@ -91,7 +85,7 @@ export class OpkClientBrowser {
   /**
    * Restores the non-extractable signer saved before the OAuth redirect.
    */
-  static async resumeAuth(op: OpenIdProvider): Promise<OpkClientBrowser> {
+  static async resumeAuth(op: BrowserOpenIdProvider): Promise<OpkClientBrowser> {
     const signerID = sessionStorage.getItem(SIGNER_ID_STORAGE_KEY);
     const storedAlgorithm = sessionStorage.getItem(ALGORITHM_STORAGE_KEY);
     if (!signerID || !storedAlgorithm) {
@@ -159,7 +153,7 @@ export class OpkClientBrowser {
   /**
    * Gets the OpenID Provider
    */
-  getOp(): OpenIdProvider {
+  getOp(): BrowserOpenIdProvider {
     return this.op;
   }
 
@@ -179,8 +173,7 @@ export class OpkClientBrowser {
     let authError: unknown;
     let authFailed = false;
     try {
-      const browserOp = this.op as BrowserOpenIdProvider;
-      const tokens = browserOp.handleCallback();
+      const tokens = await this.op.handleCallback();
       if (!tokens || !tokens.idToken) {
         throw new Error('No tokens found in callback');
       }
