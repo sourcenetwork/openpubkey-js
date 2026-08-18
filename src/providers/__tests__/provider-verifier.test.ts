@@ -159,6 +159,38 @@ describe('DefaultProviderVerifier', () => {
       ).rejects.toThrow('Audience mismatch');
     });
 
+    it('should validate the authorized party for multiple audiences', async () => {
+      const cicMock = {
+        hash: async () => new TextEncoder().encode('hash'),
+      } as Claims;
+      const token = await createTestToken({
+        iss: testIssuer,
+        sub: 'user123',
+        aud: ['client-id', 'another-audience'],
+        azp: 'another-client',
+        nonce: 'hash',
+      });
+      const verifier = newProviderVerifier(testIssuer, {
+        commitType: CommitTypes.NONCE_CLAIM,
+        clientID: 'client-id',
+        discoverPublicKey: createMockPublicKeyFinder(),
+      });
+
+      await expect(
+        verifier.verifyIDToken(new TextEncoder().encode(token), cicMock)
+      ).rejects.toThrow('Authorized party mismatch');
+
+      const missingAzp = await createTestToken({
+        iss: testIssuer,
+        sub: 'user123',
+        aud: ['client-id', 'another-audience'],
+        nonce: 'hash',
+      });
+      await expect(
+        verifier.verifyIDToken(new TextEncoder().encode(missingAzp), cicMock)
+      ).rejects.toThrow('Missing authorized party');
+    });
+
     it('should skip client ID check when skipClientIDCheck is true', async () => {
       const cicHash = 'hash';
       const cicMock = {

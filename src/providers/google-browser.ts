@@ -3,7 +3,7 @@
  * Uses redirect-based OAuth flow instead of local HTTP server
  */
 
-import type { OpenIdProvider } from './types.js';
+import type { BrowserOpenIdProvider } from './types.js';
 import type { Tokens } from '../oidc/tokens.js';
 import type { Claims } from '../pktoken/clientinstance/claims.js';
 import type { PublicKeyRecord } from '../discover/discover.js';
@@ -47,7 +47,7 @@ export function getDefaultGoogleBrowserOpOptions(): GoogleBrowserOptions {
  * Google OpenID Provider implementation for browsers
  * Uses redirect-based OAuth flow
  */
-export class GoogleBrowserOp implements OpenIdProvider {
+export class GoogleBrowserOp implements BrowserOpenIdProvider {
   private options: GoogleBrowserOptions;
   private publicKeyFinder: PublicKeyFinder;
   private verifier: DefaultProviderVerifier;
