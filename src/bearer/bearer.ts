@@ -3,7 +3,7 @@
  *
  * The token is a signed JWT whose payload carries:
  *   - iss:                the issuer DID (usually did:key:z... matching the signer's public key)
- *   - authorized_account: optional SourceHub bech32 account for feegranted broadcasts
+ *   - authorized_account: optional Vera bech32 account for feegranted broadcasts
  *   - pkt:                optional OpenPubkey PKToken, compact-serialized + base64url-encoded
  *   - provider_token:     optional free-form string passed through by the server
  *   - iat, exp:           standard Unix timestamp claims
@@ -21,7 +21,7 @@ import { PKToken } from '../pktoken/pktoken.js';
 export interface BuildBearerTokenOptions {
   /** DID of the signer, e.g. `did:key:z...`. Required. */
   iss: string;
-  /** SourceHub account authorised to broadcast on behalf of the DID. Omit for read-only tokens. */
+  /** Vera account authorised to broadcast on behalf of the DID. Omit for read-only tokens. */
   authorizedAccount?: string;
   /** OpenPubkey PKToken bound to the signer, if the caller is signing via Google OAuth. */
   pkToken?: PKToken;
