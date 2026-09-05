@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify release tag
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          git merge-base --is-ancestor "$GITHUB_SHA" "origin/$DEFAULT_BRANCH"
+          version="$(node -p "JSON.parse(require('node:fs').readFileSync('package.json')).version")"
+          test "$GITHUB_REF_NAME" = "v$version"
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Verify source
+        run: |
+          yarn audit
+          yarn test
+          yarn lint
+          yarn build
+
+      - name: Build release archive
+        run: |
+          mkdir -p release
+          archive="release/openpubkey-js-${GITHUB_REF_NAME}.tgz"
+          yarn pack --out "$archive"
+          tar -tzf "$archive" | grep -qx 'package/package.json'
+          tar -tzf "$archive" | grep -qx 'package/dist/index.js'
+          tar -tzf "$archive" | grep -qx 'package/dist/index.d.ts'
+          sha256sum "$archive" >"$archive.sha256"
+
+      - name: Attest release archive
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: release/*.tgz
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" release/* --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
