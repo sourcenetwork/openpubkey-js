@@ -25,6 +25,8 @@ const reservedAuthorizationParams = new Set([
 ]);
 
 export interface BrowserOidcOptions {
+  /** Backend code exchange for confidential clients; never put a secret in browser options. */
+  tokenExchangeURL?: string;
   issuer: string;
   clientID: string;
   redirectURI: string;
@@ -33,6 +35,7 @@ export interface BrowserOidcOptions {
 }
 
 interface NormalizedOptions {
+  tokenExchangeURL?: string;
   issuer: string;
   clientID: string;
   redirectURI: string;
@@ -142,7 +145,10 @@ export class BrowserOidcOp implements BrowserOpenIdProvider {
         parameters,
         this.options.redirectURI,
         transaction.codeVerifier,
-        providerRequestOptions
+        {
+          [oauth.customFetch]: (url, options) =>
+            providerFetch(this.options.tokenExchangeURL ?? url, options),
+        }
       );
       const result = await oauth.processAuthorizationCodeResponse(
         discovery,
@@ -228,6 +234,10 @@ export class BrowserOidcOp implements BrowserOpenIdProvider {
 }
 
 function normalizeOptions(options: BrowserOidcOptions): NormalizedOptions {
+  if (options.tokenExchangeURL) {
+    const exchange = redirectURL(options.tokenExchangeURL);
+    if (exchange.search) throw new Error('OIDC token exchange URL must not include a query');
+  }
   secureURL(options.issuer, 'issuer', false);
   const issuer = options.issuer;
   const clientID = options.clientID.trim();
@@ -252,6 +262,7 @@ function normalizeOptions(options: BrowserOidcOptions): NormalizedOptions {
   }
   return {
     issuer,
+    tokenExchangeURL: options.tokenExchangeURL,
     clientID,
     redirectURI: options.redirectURI,
     scopes,
