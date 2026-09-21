@@ -129,37 +129,41 @@ describe('BrowserOidcOp', () => {
     expect(authorizationURL.searchParams.get('audience')).toBe('https://trust.example.com');
   });
 
-  it('validates state and exchanges the code using the saved verifier', async () => {
-    const idToken = testIDToken();
-    const fetchMock = jest
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(discoveryResponse())
-      .mockResolvedValueOnce(
-        Response.json({
-          id_token: idToken,
-          access_token: 'access-token',
-          token_type: 'Bearer',
-        })
-      );
-    const op = new BrowserOidcOp({ issuer, clientID, redirectURI });
-    await expect(op.requestTokens(mockClaims())).rejects.toThrow('Redirecting');
-    const transaction = JSON.parse(sessionStorage.getItem(transactionKey)!);
-    location.href = `${redirectURI}?code=authorization-code&state=${transaction.state}`;
+  it.each([undefined, 'https://trust.example.com/auth/google/token'])(
+    'validates state and exchanges the code using the saved verifier (exchange: %s)',
+    async (tokenExchangeURL) => {
+      const idToken = testIDToken();
+      const fetchMock = jest
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValueOnce(discoveryResponse())
+        .mockResolvedValueOnce(
+          Response.json({
+            id_token: idToken,
+            access_token: 'access-token',
+            token_type: 'Bearer',
+          })
+        );
+      const op = new BrowserOidcOp({ issuer, clientID, redirectURI, tokenExchangeURL });
+      await expect(op.requestTokens(mockClaims())).rejects.toThrow('Redirecting');
+      const transaction = JSON.parse(sessionStorage.getItem(transactionKey)!);
+      location.href = `${redirectURI}?code=authorization-code&state=${transaction.state}`;
 
-    const tokens = await op.handleCallback();
-    expect(new TextDecoder().decode(tokens?.idToken)).toBe(idToken);
-    expect(new TextDecoder().decode(tokens?.accessToken)).toBe('access-token');
-    expect(tokens?.refreshToken).toBeUndefined();
-    expect(sessionStorage.getItem(transactionKey)).toBeNull();
+      const tokens = await op.handleCallback();
+      expect(new TextDecoder().decode(tokens?.idToken)).toBe(idToken);
+      expect(new TextDecoder().decode(tokens?.accessToken)).toBe('access-token');
+      expect(tokens?.refreshToken).toBeUndefined();
+      expect(sessionStorage.getItem(transactionKey)).toBeNull();
 
-    const tokenRequest = fetchMock.mock.calls[1];
-    expect(tokenRequest[0]).toBe(`${issuer}oauth/token`);
-    const body = tokenRequest[1]?.body as URLSearchParams;
-    expect(body.get('grant_type')).toBe('authorization_code');
-    expect(body.get('code')).toBe('authorization-code');
-    expect(body.get('code_verifier')).toBe(transaction.codeVerifier);
-    expect(body.get('redirect_uri')).toBe(redirectURI);
-  });
+      const tokenRequest = fetchMock.mock.calls[1];
+      expect(tokenRequest[0]).toBe(tokenExchangeURL ?? `${issuer}oauth/token`);
+      const body = tokenRequest[1]?.body as URLSearchParams;
+      expect(body.get('grant_type')).toBe('authorization_code');
+      expect(body.get('code')).toBe('authorization-code');
+      expect(body.get('code_verifier')).toBe(transaction.codeVerifier);
+      expect(body.get('redirect_uri')).toBe(redirectURI);
+      expect(body.has('client_secret')).toBe(false);
+    }
+  );
 
   it('rejects a token response that is not bound to the CIC nonce', async () => {
     jest
@@ -229,6 +233,25 @@ describe('BrowserOidcOp', () => {
   });
 
   it('requires exact secure configuration and discovery metadata', async () => {
+    for (const tokenExchangeURL of [
+      'http://trust.example.com/token',
+      'https://user:secret@trust.example.com/token',
+      'https://trust.example.com/token?secret=value',
+      'https://trust.example.com/token#fragment',
+    ]) {
+      expect(
+        () => new BrowserOidcOp({ issuer, clientID, redirectURI, tokenExchangeURL })
+      ).toThrow();
+    }
+    expect(
+      () =>
+        new BrowserOidcOp({
+          issuer,
+          clientID,
+          redirectURI,
+          tokenExchangeURL: 'http://localhost:8080/auth/google/token',
+        })
+    ).not.toThrow();
     expect(
       () => new BrowserOidcOp({ issuer: 'http://tenant.example.com', clientID, redirectURI })
     ).toThrow('HTTPS');
@@ -242,9 +265,9 @@ describe('BrowserOidcOp', () => {
         })
     ).toThrow('reserved');
     const issuerWithoutSlash = 'https://accounts.example.com';
-    expect(
-      new BrowserOidcOp({ issuer: issuerWithoutSlash, clientID, redirectURI }).issuer()
-    ).toBe(issuerWithoutSlash);
+    expect(new BrowserOidcOp({ issuer: issuerWithoutSlash, clientID, redirectURI }).issuer()).toBe(
+      issuerWithoutSlash
+    );
 
     jest
       .spyOn(globalThis, 'fetch')
